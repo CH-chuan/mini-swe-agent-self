@@ -132,10 +132,12 @@ agent:
 
     Note: In rare cases, if you need to reference a similar format in your command, you might have
     to proceed in two steps, first writing TRIPLEBACKTICKSBASH, then replacing them with ```bash.
-  step_limit: 0.
+  step_limit: 40
   cost_limit: 0.
 environment:
   environment_class: singularity
+  cwd: testbed/
+  timeout: 30
   env:
     PAGER: cat
     MANPAGER: cat
@@ -143,7 +145,7 @@ environment:
     PIP_PROGRESS_BAR: 'off'
     TQDM_DISABLE: '1'
 model:
-  model_name: gptoss-120b
+  model_name: Qwen3-Coder
   model_kwargs:
     custom_llm_provider: "hosted_vllm"
     temperature: 0.0

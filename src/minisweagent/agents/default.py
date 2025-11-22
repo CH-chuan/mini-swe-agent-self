@@ -112,6 +112,10 @@ class DefaultAgent:
         raise FormatError(self.render_template(self.config.format_error_template, actions=actions))
 
     def execute_action(self, action: dict) -> dict:
+
+        # # debug
+        # print("action to execute:", action)
+
         try:
             output = self.env.execute(action["action"])
         except subprocess.TimeoutExpired as e:
