@@ -78,6 +78,12 @@ class SingularityEnvironment:
             cmd.extend(["--env", f"{key}={value}"])
 
         cmd.extend(["--writable", str(self.sandbox_dir), "bash", "-c", command])
+
+        # debug
+        print("*"*100)
+        print("command run is:", cmd)
+        print("*"*100)
+
         result = subprocess.run(
             cmd,
             text=True,
@@ -87,6 +93,12 @@ class SingularityEnvironment:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
         )
+
+        # debug
+        print("*"*100)
+        print("command output:", result)
+        print("*"*100)
+
         return {"output": result.stdout, "returncode": result.returncode}
 
     def cleanup(self):
