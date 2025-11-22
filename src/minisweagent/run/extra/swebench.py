@@ -119,6 +119,17 @@ def remove_from_preds_file(output_path: Path, instance_id: str):
             output_path.write_text(json.dumps(output_data, indent=2))
 
 
+def collect_patch(env: Environment | None) -> str:
+    """Collect the staged diff from the environment."""
+    if env is None:
+        return ""
+    result = env.execute("git add -A && git diff --cached")
+    if result["returncode"] != 0:
+        logger.warning(f"Failed to collect patch (returncode={result['returncode']}): {result['output']}")
+        return ""
+    return result["output"].strip()
+
+
 def process_instance(
     instance: dict,
     output_dir: Path,
@@ -139,6 +150,9 @@ def process_instance(
 
     agent = None
     extra_info = None
+    env: Environment | None = None
+    exit_status = "Unknown"
+    result = ""
 
     try:
         env = get_sb_environment(config, instance)
@@ -155,16 +169,18 @@ def process_instance(
         exit_status, result = type(e).__name__, str(e)
         extra_info = {"traceback": traceback.format_exc()}
     finally:
+        patch = collect_patch(env)
+        final_result = patch or result
         save_traj(
             agent,
             instance_dir / f"{instance_id}.traj.json",
             exit_status=exit_status,
-            result=result,
+            result=final_result,
             extra_info=extra_info,
             instance_id=instance_id,
             print_fct=logger.info,
         )
-        update_preds_file(output_dir / "preds.json", instance_id, model.config.model_name, result)
+        update_preds_file(output_dir / "preds.json", instance_id, model.config.model_name, final_result)
         progress_manager.on_instance_end(instance_id, exit_status)
 
 
