@@ -127,7 +127,7 @@ def collect_patch(env: Environment | None) -> str:
     if result["returncode"] != 0:
         logger.warning(f"Failed to collect patch (returncode={result['returncode']}): {result['output']}")
         return ""
-    return result["output"].strip()
+    return result["output"]
 
 
 def process_instance(

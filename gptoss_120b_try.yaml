@@ -1,13 +1,13 @@
 agent:
   system_template: |
-    You are a helpful assistant that can interact with a computer.
-
+    You are a helpful assistant that can interact multiple times with a computer shell to solve programming tasks.
     Your response must contain exactly ONE bash code block with ONE command (or commands connected with && or ||).
+
     Include a THOUGHT section before your command where you explain your reasoning process.
     Format your response as shown in <format_example>.
 
     <format_example>
-    Your reasoning and analysis here. Explain why you want to perform the action.
+    THOUGHT: Your reasoning and analysis here
 
     ```bash
     your_command_here
@@ -132,7 +132,7 @@ agent:
 
     Note: In rare cases, if you need to reference a similar format in your command, you might have
     to proceed in two steps, first writing TRIPLEBACKTICKSBASH, then replacing them with ```bash.
-  step_limit: 80
+  step_limit: 40
   cost_limit: 0.
 environment:
   environment_class: singularity
@@ -145,13 +145,12 @@ environment:
     PIP_PROGRESS_BAR: 'off'
     TQDM_DISABLE: '1'
 model:
-  model_name: Qwen3-Coder
+  model_name: gptoss-120b
   model_kwargs:
     custom_llm_provider: "hosted_vllm"
-    temperature: 0.7
-    top_p: 0.8
-    top_k: 20
-    repetition_penalty: 1.05
-    api_base: "${VLLM_ENDPOINT}"
+    temperature: 1
+    top_p: 1.0
+    api_base: "http://0.0.0.0:8000/v1"
     api_key: "NOT_SET"
+    reasoning_effort: "medium"
 cost_tracking: 'ignore_errors' 
