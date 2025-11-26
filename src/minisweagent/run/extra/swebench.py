@@ -3,10 +3,13 @@
 """Run mini-SWE-agent on SWE-bench instances in batch mode."""
 # Read this first: https://mini-swe-agent.com/latest/usage/swebench/  (usage docs)
 
+import copy
 import concurrent.futures
 import json
+import os
 import random
 import re
+import subprocess
 import threading
 import time
 import traceback
@@ -77,14 +80,29 @@ def get_swebench_docker_image_name(instance: dict) -> str:
     return image_name
 
 
-def get_sb_environment(config: dict, instance: dict) -> Environment:
+def build_sif_images(image_names: set[str], cache_dir: Path, executable: str) -> dict[str, Path]:
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    sif_lookup: dict[str, Path] = {}
+    for image_name in image_names:
+        safe_name = re.sub(r"[^a-zA-Z0-9_.-]+", "_", image_name)
+        sif_path = cache_dir / f"{safe_name}.sif"
+        sif_lookup[image_name] = sif_path
+        if sif_path.exists():
+            continue
+        logger.info(f"Building Singularity image {image_name} -> {sif_path}")
+        subprocess.run([executable, "build", str(sif_path), f"docker://{image_name}"], check=True, capture_output=True)
+    return sif_lookup
+
+
+def get_sb_environment(config: dict, instance: dict, sif_lookup: dict[str, Path] | None = None) -> Environment:
     env_config = config.setdefault("environment", {})
     env_config["environment_class"] = env_config.get("environment_class", "docker")
     image_name = get_swebench_docker_image_name(instance)
     if env_config["environment_class"] == "docker":
         env_config["image"] = image_name
     elif env_config["environment_class"] == "singularity":
-        env_config["image"] = "docker://" + image_name
+        sif_path = sif_lookup.get(image_name) if sif_lookup else None
+        env_config["image"] = str(sif_path) if sif_path else "docker://" + image_name
     env = get_environment(env_config)
     if startup_command := config.get("run", {}).get("env_startup_command"):
         startup_command = Template(startup_command, undefined=StrictUndefined).render(**instance)
@@ -135,8 +153,10 @@ def process_instance(
     output_dir: Path,
     config: dict,
     progress_manager: RunBatchProgressManager,
+    sif_lookup: dict[str, Path],
 ) -> None:
     """Process a single SWEBench instance."""
+    config = copy.deepcopy(config)
     instance_id = instance["instance_id"]
     instance_dir = output_dir / instance_id
     # avoid inconsistent state if something here fails and there's leftover previous files
@@ -146,7 +166,7 @@ def process_instance(
     task = instance["problem_statement"]
 
     progress_manager.on_instance_start(instance_id)
-    progress_manager.update_instance_status(instance_id, "Pulling/starting docker")
+    progress_manager.update_instance_status(instance_id, "Preparing environment")
 
     agent = None
     extra_info = None
@@ -155,7 +175,7 @@ def process_instance(
     result = ""
 
     try:
-        env = get_sb_environment(config, instance)
+        env = get_sb_environment(config, instance, sif_lookup)
         agent = ProgressTrackingAgent(
             model,
             env,
@@ -219,6 +239,8 @@ def main(
     redo_existing: bool = typer.Option(False, "--redo-existing", help="Redo existing instances", rich_help_panel="Data selection"),
     config_spec: Path = typer.Option( builtin_config_dir / "extra" / "swebench.yaml", "-c", "--config", help="Path to a config file", rich_help_panel="Basic"),
     environment_class: str | None = typer.Option( None, "--environment-class", help="Environment type to use. Recommended are docker or singularity", rich_help_panel="Advanced"),
+    sif_cache: Path | None = typer.Option(None, "--sif-cache", help="Directory for cached Singularity .sif images", rich_help_panel="Advanced"),
+    prepare_sif_only: bool = typer.Option(False, "--prepare-sif-only", help="Build Singularity .sif images and exit", rich_help_panel="Advanced"),
 ) -> None:
     # fmt: on
     output_path = Path(output)
@@ -240,12 +262,27 @@ def main(
     config_path = get_config_path(config_spec)
     logger.info(f"Loading agent config from '{config_path}'")
     config = yaml.safe_load(config_path.read_text())
+    env_config = config.setdefault("environment", {})
     if environment_class is not None:
-        config.setdefault("environment", {})["environment_class"] = environment_class
+        env_config["environment_class"] = environment_class
     if model is not None:
         config.setdefault("model", {})["model_name"] = model
     if model_class is not None:
         config.setdefault("model", {})["model_class"] = model_class
+    sif_lookup: dict[str, Path] = {}
+    env_type = env_config.get("environment_class", "docker")
+    if env_type == "singularity":
+        if prepare_sif_only and sif_cache is None:
+            raise ValueError("--prepare-sif-only requires --sif-cache when using singularity")
+        if sif_cache is not None:
+            executable = env_config.get("executable") or os.getenv("MSWEA_SINGULARITY_EXECUTABLE", "singularity")
+            image_names = {get_swebench_docker_image_name(instance) for instance in instances}
+            sif_lookup = build_sif_images(image_names, sif_cache, executable)
+            if prepare_sif_only:
+                logger.info(f"Prepared {len(sif_lookup)} Singularity images in {sif_cache}")
+                return
+    elif prepare_sif_only:
+        raise ValueError("--prepare-sif-only is only valid with singularity environments")
 
     progress_manager = RunBatchProgressManager(len(instances), output_path / f"exit_statuses_{time.time()}.yaml")
 
@@ -263,7 +300,7 @@ def main(
     with Live(progress_manager.render_group, refresh_per_second=4):
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {
-                executor.submit(process_instance, instance, output_path, config, progress_manager): instance[
+                executor.submit(process_instance, instance, output_path, config, progress_manager, sif_lookup): instance[
                     "instance_id"
                 ]
                 for instance in instances
