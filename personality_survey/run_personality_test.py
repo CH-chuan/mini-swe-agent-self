@@ -27,30 +27,21 @@ def load_inventory(inventory_path):
             inventory.append(row)
     return inventory
 
-def format_message(message):
-    """Formats a message dictionary into a string."""
-    role = message.get('role', '')
-    content = message.get('content', '')
-    if isinstance(content, dict):
-        content = json.dumps(content)
-    return f"{role.upper()}: {content}\n\n"
-
 def get_contexts(trajectory):
-    """Extracts the three contexts from the trajectory."""
+    """Extracts the three contexts from the trajectory as lists of messages."""
     messages = trajectory.get('messages', [])
     if not messages:
         logger.warning("No messages found in trajectory.")
-        return "", "", ""
+        return [], [], []
 
     # Condition 1: System Prompt Only
     # Find the first system message
     system_msg = next((m for m in messages if m['role'] == 'system'), None)
-    context_system = format_message(system_msg) if system_msg else ""
+    messages_system = [system_msg] if system_msg else []
 
     # Condition 2: System + Task (First User Message)
     # Assuming the task is the first user message after the system prompt
-    # We'll just take the first few messages until we have one system and one user
-    context_system_task = ""
+    messages_system_task = []
     system_found = False
     user_found = False
     
@@ -71,25 +62,23 @@ def get_contexts(trajectory):
         # Fallback: just take first 2
         temp_messages = messages[:2]
     
-    context_system_task = "".join([format_message(m) for m in temp_messages])
+    messages_system_task = temp_messages
 
     # Condition 3: Full History
-    context_full = "".join([format_message(m) for m in messages])
+    messages_full = messages
 
-    return context_system, context_system_task, context_full
+    return messages_system, messages_system_task, messages_full
 
-def query_model(model_name, api_base, prompt, dry_run=False):
+def query_model(model_name, api_base, messages, dry_run=False):
     """Queries the model using litellm."""
     if dry_run:
-        logger.info(f"Dry run: Skipping model query. Prompt length: {len(prompt)}")
+        logger.info(f"Dry run: Skipping model query. Messages length: {len(messages)}")
         return "MOCK_RESPONSE_A"
 
     if litellm is None:
         logger.error("litellm module not found. Please install it to run the test.")
         raise ImportError("litellm module not found")
 
-    messages = [{"role": "user", "content": prompt}]
-    
     # Configure litellm
     if api_base:
         litellm.api_base = api_base
@@ -130,47 +119,78 @@ def main():
         item_template_content = f.read()
 
     # Extract contexts
-    context_system, context_system_task, context_full = get_contexts(trajectory)
+    messages_system, messages_system_task, messages_full = get_contexts(trajectory)
     
     results = []
 
-    logger.info("Starting personality test...")
-    for row in tqdm(inventory):
+    # Condition 1: System Only
+    logger.info("Running Condition 1: System Only...")
+    results_system = []
+    for row in tqdm(inventory, desc="System Only"):
         item_text = row['text']
-        
-        # Format the question using the template
         question = item_template_content.format(item_text.lower())
-
-        # Condition 1: System Only
-        prompt_system = f"{context_system}\n\n{question}"
-        response_system = query_model(args.model_name, args.api_base, prompt_system, args.dry_run)
         
-        # Condition 2: System + Task
-        prompt_task = f"{context_system_task}\n\n{question}"
-        response_task = query_model(args.model_name, args.api_base, prompt_task, args.dry_run)
-
-        # Condition 3: Full History
-        prompt_full = f"{context_full}\n\n{question}"
-        response_full = query_model(args.model_name, args.api_base, prompt_full, args.dry_run)
-
-        results.append({
+        current_messages = messages_system + [{"role": "user", "content": question}]
+        response_system = query_model(args.model_name, args.api_base, current_messages, args.dry_run)
+        
+        results_system.append({
             "item_text": item_text,
             "label_ocean": row['label_ocean'],
             "key": row['key'],
-            "prompt_system": prompt_system,
-            "response_system": response_system,
-            "prompt_task": prompt_task,
-            "response_task": response_task,
-            "prompt_full": prompt_full,
-            "response_full": response_full
+            "messages": current_messages,
+            "response": response_system,
+        })
+    
+    output_file_system = os.path.join(args.output_dir, "personality_test_results_system.json")
+    with open(output_file_system, 'w') as f:
+        json.dump(results_system, f, indent=2)
+    logger.info(f"Results for System Only saved to {output_file_system}")
+
+    # Condition 2: System + Task
+    logger.info("Running Condition 2: System + Task...")
+    results_task = []
+    for row in tqdm(inventory, desc="System + Task"):
+        item_text = row['text']
+        question = item_template_content.format(item_text.lower())
+        
+        current_messages = messages_system_task + [{"role": "user", "content": question}]
+        response_task = query_model(args.model_name, args.api_base, current_messages, args.dry_run)
+
+        results_task.append({
+            "item_text": item_text,
+            "label_ocean": row['label_ocean'],
+            "key": row['key'],
+            "messages": current_messages,
+            "response": response_task,
         })
 
-    # Save results
-    output_file = os.path.join(args.output_dir, "personality_test_results.json")
-    with open(output_file, 'w') as f:
-        json.dump(results, f, indent=2)
-    
-    logger.info(f"Results saved to {output_file}")
+    output_file_task = os.path.join(args.output_dir, "personality_test_results_task.json")
+    with open(output_file_task, 'w') as f:
+        json.dump(results_task, f, indent=2)
+    logger.info(f"Results for System + Task saved to {output_file_task}")
+
+    # Condition 3: Full History
+    logger.info("Running Condition 3: Full History...")
+    results_full = []
+    for row in tqdm(inventory, desc="Full History"):
+        item_text = row['text']
+        question = item_template_content.format(item_text.lower())
+        
+        current_messages = messages_full + [{"role": "user", "content": question}]
+        response_full = query_model(args.model_name, args.api_base, current_messages, args.dry_run)
+
+        results_full.append({
+            "item_text": item_text,
+            "label_ocean": row['label_ocean'],
+            "key": row['key'],
+            "messages": current_messages,
+            "response": response_full,
+        })
+
+    output_file_full = os.path.join(args.output_dir, "personality_test_results_full.json")
+    with open(output_file_full, 'w') as f:
+        json.dump(results_full, f, indent=2)
+    logger.info(f"Results for Full History saved to {output_file_full}")
 
 if __name__ == "__main__":
     main()
