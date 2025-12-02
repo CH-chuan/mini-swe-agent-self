@@ -130,14 +130,15 @@ def main():
         item_text = row['text']
         question = item_template_content.format(item_text.lower())
         
-        current_messages = messages_system + [{"role": "user", "content": question}]
+        question_message = {"role": "user", "content": question}
+        current_messages = messages_system + [question_message]
         response_system = query_model(args.model_name, args.api_base, current_messages, args.dry_run)
         
         results_system.append({
             "item_text": item_text,
             "label_ocean": row['label_ocean'],
             "key": row['key'],
-            "messages": current_messages,
+            # "question_message": question_message,
             "response": response_system,
         })
     
@@ -153,14 +154,15 @@ def main():
         item_text = row['text']
         question = item_template_content.format(item_text.lower())
         
-        current_messages = messages_system_task + [{"role": "user", "content": question}]
+        question_message = {"role": "user", "content": question}
+        current_messages = messages_system_task + [question_message]
         response_task = query_model(args.model_name, args.api_base, current_messages, args.dry_run)
 
         results_task.append({
             "item_text": item_text,
             "label_ocean": row['label_ocean'],
             "key": row['key'],
-            "messages": current_messages,
+            # "question_message": question_message,
             "response": response_task,
         })
 
@@ -176,14 +178,15 @@ def main():
         item_text = row['text']
         question = item_template_content.format(item_text.lower())
         
-        current_messages = messages_full + [{"role": "user", "content": question}]
+        question_message = {"role": "user", "content": question}
+        current_messages = messages_full + [question_message]
         response_full = query_model(args.model_name, args.api_base, current_messages, args.dry_run)
 
         results_full.append({
             "item_text": item_text,
             "label_ocean": row['label_ocean'],
             "key": row['key'],
-            "messages": current_messages,
+            # "question_message": question_message,
             "response": response_full,
         })
 
