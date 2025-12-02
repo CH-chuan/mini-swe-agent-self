@@ -57,6 +57,13 @@ APPTAINER_IMAGE="/project/jingjing_storage/persona_coder/ubuntu-25.04.sif"
 
 
 # -------------------------------------------------------------------
+# Configuration for run_personality_test.py
+# -------------------------------------------------------------------
+RESUME="true"
+DIMENSIONS="OCEAN"
+MAX_WORKERS="4"
+
+# -------------------------------------------------------------------
 # Number of rounds per personality
 # - Default range: 0:21   (i.e., rounds r00..r20)
 # - Override with:
@@ -115,7 +122,10 @@ ITEM_TEMPLATE_PATH="${ITEM_TEMPLATE}",\
 MODEL_NAME="${MODEL_NAME}",\
 SERVED_MODEL_NAME="${SERVED_MODEL_NAME}",\
 MODELS_DIR="${MODELS_DIR}",\
-APPTAINER_IMAGE="${APPTAINER_IMAGE}" \
+APPTAINER_IMAGE="${APPTAINER_IMAGE}",\
+RESUME="${RESUME}",\
+DIMENSIONS="${DIMENSIONS}",\
+MAX_WORKERS="${MAX_WORKERS}" \
       "${SLURM_SCRIPT}"
 
     ROUND_INDEX=$((ROUND_INDEX + 1))

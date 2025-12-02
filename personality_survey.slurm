@@ -39,6 +39,10 @@ export APPTAINER_CACHEDIR=/scratch/muh5jn/apptainer_cache
 : "${MODELS_DIR:=/project/jingjing_storage/persona_coder/models}"
 : "${APPTAINER_IMAGE:=/project/jingjing_storage/persona_coder/ubuntu-25.04.sif}"
 
+: "${RESUME:=true}"
+: "${DIMENSIONS:=OCEAN}"
+: "${MAX_WORKERS:=4}"
+
 mkdir -p "$OUTPUT_DIR"
 
 echo "=== Runtime configuration ==="
@@ -49,6 +53,9 @@ echo "OUTPUT_DIR       = ${OUTPUT_DIR}"
 echo "MODEL_NAME       = ${MODEL_NAME}"
 echo "SERVED_MODEL_NAME= ${SERVED_MODEL_NAME}"
 echo "MODELS_DIR       = ${MODELS_DIR}"
+echo "RESUME           = ${RESUME}"
+echo "DIMENSIONS       = ${DIMENSIONS}"
+echo "MAX_WORKERS      = ${MAX_WORKERS}"
 echo "============================="
 
 
@@ -164,6 +171,12 @@ conda activate miniswe
 
 echo "Running personality test..."
 
+# Construct arguments
+ARGS=""
+if [ "$RESUME" = "true" ]; then
+    ARGS="$ARGS --resume"
+fi
+
 # Use find to locate all .traj.json files recursively
 # Structure example: .../instance_id/final.traj.json OR .../instance_id/instance_id.traj.json
 find "$INPUT_DIR" -name "*.traj.json" | while read TRAJ_FILE; do
@@ -182,7 +195,10 @@ find "$INPUT_DIR" -name "*.traj.json" | while read TRAJ_FILE; do
       --output_dir "$INSTANCE_OUTPUT_DIR" \
       --item_template_path "$ITEM_TEMPLATE_PATH" \
       --api_base "$VLLM_ENDPOINT" \
-      --model_name "hosted_vllm/$SERVED_MODEL_NAME"
+      --model_name "hosted_vllm/$SERVED_MODEL_NAME" \
+      --dimensions "$DIMENSIONS" \
+      --max_workers "$MAX_WORKERS" \
+      $ARGS
 done
 
 echo "Job completed."

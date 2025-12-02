@@ -5,6 +5,10 @@ preds.json
 .env
 traj.json
 
+# slurm files like slurm-6388890.out
+slurm*.out
+slurm_outputs/
+
 # Created by https://www.toptal.com/developers/gitignore/api/python
 # Edit at https://www.toptal.com/developers/gitignore?templates=python
 

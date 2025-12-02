@@ -8,6 +8,7 @@ except ImportError:
     litellm = None
 from tqdm import tqdm
 import logging
+import concurrent.futures
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -105,6 +106,10 @@ def main():
     parser.add_argument("--model_name", default="hosted_vllm/Qwen3-Coder", help="Model name to query.")
     parser.add_argument("--dry_run", action="store_true", help="Run without querying the model (for testing).")
     
+    parser.add_argument("--resume", action="store_true", help="Resume from existing output files.")
+    parser.add_argument("--dimensions", default="OCEAN", help="Dimensions to run (e.g., 'O' for Openness, 'OC' for Openness and Conscientiousness).")
+    parser.add_argument("--max_workers", type=int, default=1, help="Maximum number of concurrent workers.")
+    
     args = parser.parse_args()
 
     # Create output directory
@@ -115,85 +120,104 @@ def main():
     trajectory = load_trajectory(args.trajectory_path)
     inventory = load_inventory(args.inventory_path)
     
+    # Filter inventory by dimensions
+    allowed_dimensions = set(args.dimensions.upper())
+    inventory = [item for item in inventory if item['label_ocean'] in allowed_dimensions]
+    logger.info(f"Filtered inventory to {len(inventory)} items with dimensions: {args.dimensions}")
+
     with open(args.item_template_path, 'r') as f:
         item_template_content = f.read()
 
     # Extract contexts
     messages_system, messages_system_task, messages_full = get_contexts(trajectory)
     
-    results = []
+    def run_condition(condition_name, messages_context, output_filename_base):
+        logger.info(f"Running Condition: {condition_name}...")
+        
+        jsonl_filename = f"{output_filename_base}.jsonl"
+        json_filename = f"{output_filename_base}.json"
+        
+        output_path_jsonl = os.path.join(args.output_dir, jsonl_filename)
+        output_path_json = os.path.join(args.output_dir, json_filename)
+        
+        current_results = []
+        processed_keys = set()
+
+        # Check for existing JSONL
+        if os.path.exists(output_path_jsonl):
+             logger.info(f"Resuming {condition_name} from {jsonl_filename}...")
+             with open(output_path_jsonl, 'r') as f:
+                for line in f:
+                    try:
+                        item = json.loads(line)
+                        current_results.append(item)
+                        processed_keys.add(item['key'])
+                    except json.JSONDecodeError:
+                        continue
+        # Check for existing JSON and convert if JSONL doesn't exist
+        elif os.path.exists(output_path_json):
+            logger.info(f"Found existing JSON file {json_filename}. Converting to JSONL...")
+            try:
+                with open(output_path_json, 'r') as f:
+                    data = json.load(f)
+                    for item in data:
+                        current_results.append(item)
+                        processed_keys.add(item['key'])
+                
+                # Write converted data to JSONL
+                with open(output_path_jsonl, 'w') as f:
+                    for item in current_results:
+                        f.write(json.dumps(item) + "\n")
+                logger.info(f"Conversion complete. Created {jsonl_filename}.")
+            except json.JSONDecodeError:
+                 logger.warning(f"Could not parse existing JSON file {output_path_json}. Starting fresh.")
+
+        items_to_process = [row for row in inventory if row['key'] not in processed_keys]
+        
+        if not items_to_process:
+            logger.info(f"All items for {condition_name} already processed.")
+            return
+
+        # Open file in append mode
+        with open(output_path_jsonl, 'a') as f_out:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=args.max_workers) as executor:
+                future_to_item = {}
+                for row in items_to_process:
+                    item_text = row['text']
+                    question = item_template_content.format(item_text.lower())
+                    
+                    question_message = {"role": "user", "content": question}
+                    current_messages = messages_context + [question_message]
+                    
+                    future = executor.submit(query_model, args.model_name, args.api_base, current_messages, args.dry_run)
+                    future_to_item[future] = row
+
+                for future in tqdm(concurrent.futures.as_completed(future_to_item), total=len(items_to_process), desc=condition_name):
+                    row = future_to_item[future]
+                    try:
+                        response = future.result()
+                        result_item = {
+                            "item_text": row['text'],
+                            "label_ocean": row['label_ocean'],
+                            "key": row['key'],
+                            # "question_message": question_message, # Not saving this to save space
+                            "response": response,
+                        }
+                        f_out.write(json.dumps(result_item) + "\n")
+                        f_out.flush()
+                    except Exception as e:
+                        logger.error(f"Error processing item {row['key']}: {e}")
+        
+        logger.info(f"Results for {condition_name} saved to {output_path_jsonl}")
 
     # Condition 1: System Only
-    logger.info("Running Condition 1: System Only...")
-    results_system = []
-    for row in tqdm(inventory, desc="System Only"):
-        item_text = row['text']
-        question = item_template_content.format(item_text.lower())
-        
-        question_message = {"role": "user", "content": question}
-        current_messages = messages_system + [question_message]
-        response_system = query_model(args.model_name, args.api_base, current_messages, args.dry_run)
-        
-        results_system.append({
-            "item_text": item_text,
-            "label_ocean": row['label_ocean'],
-            "key": row['key'],
-            # "question_message": question_message,
-            "response": response_system,
-        })
-    
-    output_file_system = os.path.join(args.output_dir, "personality_test_results_system.json")
-    with open(output_file_system, 'w') as f:
-        json.dump(results_system, f, indent=2)
-    logger.info(f"Results for System Only saved to {output_file_system}")
+    run_condition("System Only", messages_system, "personality_test_results_system")
 
     # Condition 2: System + Task
-    logger.info("Running Condition 2: System + Task...")
-    results_task = []
-    for row in tqdm(inventory, desc="System + Task"):
-        item_text = row['text']
-        question = item_template_content.format(item_text.lower())
-        
-        question_message = {"role": "user", "content": question}
-        current_messages = messages_system_task + [question_message]
-        response_task = query_model(args.model_name, args.api_base, current_messages, args.dry_run)
-
-        results_task.append({
-            "item_text": item_text,
-            "label_ocean": row['label_ocean'],
-            "key": row['key'],
-            # "question_message": question_message,
-            "response": response_task,
-        })
-
-    output_file_task = os.path.join(args.output_dir, "personality_test_results_task.json")
-    with open(output_file_task, 'w') as f:
-        json.dump(results_task, f, indent=2)
-    logger.info(f"Results for System + Task saved to {output_file_task}")
+    run_condition("System + Task", messages_system_task, "personality_test_results_task")
 
     # Condition 3: Full History
-    logger.info("Running Condition 3: Full History...")
-    results_full = []
-    for row in tqdm(inventory, desc="Full History"):
-        item_text = row['text']
-        question = item_template_content.format(item_text.lower())
-        
-        question_message = {"role": "user", "content": question}
-        current_messages = messages_full + [question_message]
-        response_full = query_model(args.model_name, args.api_base, current_messages, args.dry_run)
-
-        results_full.append({
-            "item_text": item_text,
-            "label_ocean": row['label_ocean'],
-            "key": row['key'],
-            # "question_message": question_message,
-            "response": response_full,
-        })
-
-    output_file_full = os.path.join(args.output_dir, "personality_test_results_full.json")
-    with open(output_file_full, 'w') as f:
-        json.dump(results_full, f, indent=2)
-    logger.info(f"Results for Full History saved to {output_file_full}")
+    run_condition("Full History", messages_full, "personality_test_results_full")
 
 if __name__ == "__main__":
     main()
