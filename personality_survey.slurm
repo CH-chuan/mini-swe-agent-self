@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time=01:00:00
+#SBATCH --time=05:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
@@ -182,7 +182,7 @@ find "$INPUT_DIR" -name "*.traj.json" | while read TRAJ_FILE; do
       --output_dir "$INSTANCE_OUTPUT_DIR" \
       --item_template_path "$ITEM_TEMPLATE_PATH" \
       --api_base "$VLLM_ENDPOINT" \
-      --model_name "$SERVED_MODEL_NAME"
+      --model_name "hosted_vllm/$SERVED_MODEL_NAME"
 done
 
 echo "Job completed."

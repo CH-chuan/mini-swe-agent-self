@@ -18,17 +18,17 @@ echo "Submitting jobs using slurm script: ${SLURM_SCRIPT}"
 # -------------------------------------------------------------------
 PERSONALITIES=(
 
-  # "HC_p2"
-  # "HC_gpt"
-  # "HC_p2_modify"
-  HC_ITEM_120
-  HC_ITEM_300
+  "HC_p2"
+  "HC_gpt"
+  "HC_p2_modify"
+  "HC_ITEM_120"
+  "HC_ITEM_300"
 
-  # "LC_p2"
-  # "LC_gpt"
-  # "LC_p2_modify"
-  LC_ITEM_120
-  LC_ITEM_300
+  "LC_p2"
+  "LC_gpt"
+  "LC_p2_modify"
+  "LC_ITEM_120"
+  "LC_ITEM_300"
 
 )
 
@@ -39,12 +39,15 @@ PERSONALITIES=(
 INPUT_BASE_DIR="qwen3coder-exp-gpu-withpp"
 
 # Output base dir for survey
-OUTPUT_BASE_DIR="personality_survey_results"
+OUTPUT_BASE_DIR="personality_survey_results_qwen-exp-con"
 
 # Inventory paths
 INVENTORY_120="personality_survey/inventories/mpi_120.csv"
 INVENTORY_300="personality_survey/inventories/mpi_300.csv"
 ITEM_TEMPLATE="personality_survey/item_template.txt"
+
+# since it is too consuming, only perform 120 item is intensive
+INVENTORY_PATH="$INVENTORY_120"
 
 # Model info (should match experiment or be consistent)
 MODEL_NAME="Qwen/Qwen3-Coder-30B-A3B-Instruct"
@@ -60,7 +63,7 @@ APPTAINER_IMAGE="/project/jingjing_storage/persona_coder/ubuntu-25.04.sif"
 #     ./submit-personality-survey.sh 3:10
 #   → rounds r03..r09
 # -------------------------------------------------------------------
-ROUND_RANGE="${1:-0:21}"
+ROUND_RANGE="${1:-0:10}"
 
 IFS=":" read -r ROUND_START ROUND_END <<< "${ROUND_RANGE}"
 
@@ -77,15 +80,6 @@ ROUNDS=$(( ROUND_END - ROUND_START ))
 # -------------------------------------------------------------------
 for PERSONALITY in "${PERSONALITIES[@]}"; do
   # IFS=":" read -r PERSONALITY CONFIG_FILE <<< "${ENTRY}"
-
-  # Determine inventory based on personality tag
-  if [[ "$PERSONALITY" == *"300"* ]]; then
-    INVENTORY_PATH="$INVENTORY_300"
-    echo "Selected 300-item inventory for $PERSONALITY"
-  else
-    INVENTORY_PATH="$INVENTORY_120"
-    echo "Selected 120-item inventory for $PERSONALITY"
-  fi
 
   # ROUND_INDEX is 1..ROUNDS (for logging / job env),
   # ROUND is the actual numeric label in [ROUND_START, ROUND_END)
