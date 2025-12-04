@@ -30,6 +30,7 @@ PERSONALITIES=(
   "LC_ITEM_120"
   "LC_ITEM_300"
 
+  "NOP"
 )
 
 # -------------------------------------------------------------------
@@ -70,7 +71,7 @@ MAX_WORKERS="4"
 #     ./submit-personality-survey.sh 3:10
 #   → rounds r03..r09
 # -------------------------------------------------------------------
-ROUND_RANGE="${1:-0:10}"
+ROUND_RANGE="${1:-0:5}"
 
 IFS=":" read -r ROUND_START ROUND_END <<< "${ROUND_RANGE}"
 

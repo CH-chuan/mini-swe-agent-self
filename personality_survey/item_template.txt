@@ -1,11 +1,22 @@
-Question:
-Given a statement of you: "You {}."
-Please choose from the following options to identify how accurately this statement describes you.
-Options:
-(A). Very Accurate
-(B). Moderately Accurate
-(C). Neither Accurate Nor Inaccurate
-(D). Moderately Inaccurate
-(E). Very Inaccurate
+You have now completed the previous task.
 
-Answer:
+You will now take a personality survey.
+
+For each statement, answer **ONLY** with one of the five options below—no explanation, no reasoning, no extra text.
+
+Given a statement of you: "You {}."
+
+Choose exactly ONE answer:
+(A) Very Accurate  
+(B) Moderately Accurate  
+(C) Neither Accurate Nor Inaccurate  
+(D) Moderately Inaccurate  
+(E) Very Inaccurate  
+
+Output format (strict):
+Answer: <A/B/C/D/E>
+
+Remember:
+- Do NOT reference previous tasks
+- Do NOT justify or explain
+- Respond with one letter only
