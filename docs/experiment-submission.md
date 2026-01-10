@@ -2,6 +2,39 @@
 
 This guide explains how to use the unified experiment submission system for running SWE-bench experiments on HPC clusters.
 
+## Full Command Reference
+
+```bash
+./submit-experiment.sh \
+    -m qwen3coder-30b \                    # Model config (qwen3coder-30b, gptoss-120b, devstral-small)
+    -p NOP \                               # Personality prompt (NOP, HC-gpt, LC-gpt, HC-p2, ...)
+    -i submit-in-rules \                   # Instruction template (submit-in-rules, submit-as-tool)
+    -r 0:1 \                               # Round range START:END, exclusive (0:5 = r00-r04)
+    -t '^(django__django-11951|...)$' \    # Task filter regex (default: 60-task set)
+    -o experiments/model/personality \     # Output directory (default: auto-generated)
+    --temperature 0.0 \                    # Model temperature (default: from model config)
+    --step-limit 80 \                      # Max agent steps (default: from model config)
+    --timeout 30 \                         # Command timeout in seconds (default: from model config)
+    --time-limit 02:00:00 \                # SLURM time limit (default: from model config)
+    --dry-run                              # Preview config without submitting (remove to submit)
+```
+
+### Batch Submission Example
+
+Submit all conscientiousness personality variants with 21 rounds each:
+
+```bash
+for P in HC-gpt LC-gpt HC-p2 LC-p2 HC-p2-modify LC-p2-modify HC-item-120 LC-item-120; do
+    ./submit-experiment.sh \
+        -m qwen3coder-30b \
+        -p "$P" \
+        -r 0:21 \
+        -o "experiments/qwen3coder-30b/${P}"
+done
+```
+
+This submits 8 personalities × 21 rounds = **168 SLURM jobs**.
+
 ## Overview
 
 The experiment submission system provides a flexible way to run experiments with different combinations of:
@@ -49,6 +82,8 @@ exp_configs/
 
 ## Command Line Options
 
+**Experiment settings:**
+
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
 | `--model` | `-m` | Model config name | `qwen3coder-30b` |
@@ -57,15 +92,20 @@ exp_configs/
 | `--rounds` | `-r` | Round range (START:END) | `0:1` |
 | `--tasks` | `-t` | Instance filter regex | Default 60-task set |
 | `--output` | `-o` | Base output directory | Auto-generated |
-| `--temperature` | | Override model temperature | Model default |
-| `--step-limit` | | Max agent steps | `80` |
-| `--timeout` | | Command timeout (seconds) | `30` |
-| `--time-limit` | | SLURM time limit | `02:00:00` |
 | `--dry-run` | | Preview without submitting | |
 | `--list-models` | | List available models | |
 | `--list-personalities` | | List available personalities | |
 | `--list-instructions` | | List available instructions | |
 | `--help` | `-h` | Show help message | |
+
+**Model-specific settings (defaults from model config, can override):**
+
+| Option | Description |
+|--------|-------------|
+| `--temperature` | Override model temperature |
+| `--step-limit` | Override max agent steps |
+| `--timeout` | Override command timeout (seconds) |
+| `--time-limit` | Override SLURM time limit |
 
 ## Usage Examples
 
@@ -215,6 +255,9 @@ GPU_CONSTRAINT="a100_80gb"               # SLURM constraint
 # Model Defaults
 # =============================================================================
 TEMPERATURE="0.0"
+STEP_LIMIT="80"                          # Max agent steps
+TIMEOUT="30"                             # Command timeout (seconds)
+TIME_LIMIT="02:00:00"                    # SLURM time limit
 
 # =============================================================================
 # vLLM Serving Configuration
@@ -254,6 +297,9 @@ VLLM_DIRECT_ARGS="false"
 | `GPU_TYPE` | Yes | GPU type (a100, v100, h100) |
 | `GPU_CONSTRAINT` | Yes | SLURM constraint string |
 | `TEMPERATURE` | Yes | Default temperature |
+| `STEP_LIMIT` | Yes | Max agent steps |
+| `TIMEOUT` | Yes | Command timeout (seconds) |
+| `TIME_LIMIT` | Yes | SLURM time limit (HH:MM:SS) |
 | `USE_SNAPSHOT_PATH` | No | Use snapshot hash in model path |
 | `CONTAINER_HF_HOME` | No | Bind path for HF_HOME in container |
 | `VLLM_ENV_VARS` | No | Additional environment variables |

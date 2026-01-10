@@ -22,11 +22,11 @@ ROUNDS="0:1"
 OUTPUT_DIR=""
 INSTANCE_FILTER='^(django__django-11951|django__django-11603|astropy__astropy-14995|sphinx-doc__sphinx-9698|django__django-16527|sympy__sympy-22456|django__django-16901|django__django-9296|django__django-15277|astropy__astropy-14309|pytest-dev__pytest-7982|django__django-15863|django__django-14787|django__django-14493|scikit-learn__scikit-learn-10844|sympy__sympy-20154|django__django-15368|django__django-13741|django__django-16493|django__django-11163|django__django-14855|scikit-learn__scikit-learn-13439|django__django-16139|django__django-17029|django__django-11133|sympy__sympy-23534|django__django-16662|pydata__xarray-4075|django__django-11749|django__django-15572|django__django-14752|django__django-13516|django__django-12419|sympy__sympy-16886|django__django-10914|django__django-15467|matplotlib__matplotlib-25122|matplotlib__matplotlib-24026|sympy__sympy-24213|django__django-16612|django__django-13670|pytest-dev__pytest-7205|django__django-12050|sympy__sympy-16450|django__django-15741|django__django-15380|django__django-12708|django__django-13449|django__django-13837|django__django-16877|sphinx-doc__sphinx-10466|django__django-16454|sympy__sympy-20801|django__django-15814|scikit-learn__scikit-learn-11578|django__django-13315|django__django-14434|django__django-11848|django__django-16082|django__django-12713)$'
 
-# Overridable settings
+# CLI overrides (empty = use model default)
 TEMPERATURE=""
-STEP_LIMIT="80"
-TIMEOUT="30"
-TIME_LIMIT="02:00:00"
+STEP_LIMIT=""
+TIMEOUT=""
+TIME_LIMIT=""
 
 # =============================================================================
 # Help / Usage
@@ -44,10 +44,10 @@ OPTIONS:
   -r, --rounds RANGE        Round range START:END (default: 0:1)
   -t, --tasks REGEX         Instance filter regex (default: built-in 60-task set)
   -o, --output DIR          Base output directory (default: auto-generated)
-  --temperature FLOAT       Override model temperature
-  --step-limit INT          Max agent steps (default: 80)
-  --timeout INT             Command timeout in seconds (default: 30)
-  --time-limit HH:MM:SS     SLURM time limit (default: 02:00:00)
+  --temperature FLOAT       Override model temperature (default: model config)
+  --step-limit INT          Max agent steps (default: model config)
+  --timeout INT             Command timeout in seconds (default: model config)
+  --time-limit HH:MM:SS     SLURM time limit (default: model config)
   --dry-run                 Show config and sbatch command without submitting
   --list-models             List available model configs
   --list-personalities      List available personality prompts
@@ -169,13 +169,26 @@ if [[ ! -f "$MODEL_CONF" ]]; then
     list_available "$MODELS_CONF_DIR" "conf" "models"
 fi
 
+# Save CLI overrides before sourcing model config
+CLI_TEMPERATURE="$TEMPERATURE"
+CLI_STEP_LIMIT="$STEP_LIMIT"
+CLI_TIMEOUT="$TIMEOUT"
+CLI_TIME_LIMIT="$TIME_LIMIT"
+
 # Source model config to get defaults
 source "$MODEL_CONF"
 
-# Override temperature if specified via CLI (otherwise use model default)
-if [[ -z "${TEMPERATURE}" ]]; then
-    TEMPERATURE="${TEMPERATURE:-0.0}"
-fi
+# Apply CLI overrides (if provided) or keep model defaults
+[[ -n "$CLI_TEMPERATURE" ]] && TEMPERATURE="$CLI_TEMPERATURE"
+[[ -n "$CLI_STEP_LIMIT" ]] && STEP_LIMIT="$CLI_STEP_LIMIT"
+[[ -n "$CLI_TIMEOUT" ]] && TIMEOUT="$CLI_TIMEOUT"
+[[ -n "$CLI_TIME_LIMIT" ]] && TIME_LIMIT="$CLI_TIME_LIMIT"
+
+# Fallback defaults if model config didn't set them
+: "${TEMPERATURE:=0.0}"
+: "${STEP_LIMIT:=80}"
+: "${TIMEOUT:=30}"
+: "${TIME_LIMIT:=02:00:00}"
 
 # =============================================================================
 # Validate prompt and instruction files exist

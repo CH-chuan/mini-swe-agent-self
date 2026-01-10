@@ -92,6 +92,7 @@ def all_model_names() -> list:
     return [
         "qwen3coder-30b",
         "gptoss-120b",
+        "devstral-small",
     ]
 
 
