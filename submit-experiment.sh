@@ -43,7 +43,8 @@ OPTIONS:
   -i, --instruction NAME    Instruction template file (default: submit-in-rules)
   -r, --rounds RANGE        Round range START:END (default: 0:1)
   -t, --tasks REGEX         Instance filter regex (default: built-in 60-task set)
-  -o, --output DIR          Base output directory (default: auto-generated)
+  -o, --output DIR          Base output directory (default: experiments)
+                            Full path: DIR/MODEL/INSTRUCTION/PERSONALITY
   --temperature FLOAT       Override model temperature (default: model config)
   --step-limit INT          Max agent steps (default: model config)
   --timeout INT             Command timeout in seconds (default: model config)
@@ -218,11 +219,11 @@ if [[ ! -f "$SLURM_SCRIPT" ]]; then
 fi
 
 # =============================================================================
-# Set output directory if not specified
+# Set output directory
 # =============================================================================
-if [[ -z "$OUTPUT_DIR" ]]; then
-    OUTPUT_DIR="experiments/${MODEL}/${PERSONALITY}-${INSTRUCTION}"
-fi
+# OUTPUT_DIR is the base path; full path is base/${MODEL}/${INSTRUCTION}/${PERSONALITY}
+OUTPUT_BASE="${OUTPUT_DIR:-experiments}"
+OUTPUT_DIR="${OUTPUT_BASE}/${MODEL}/${INSTRUCTION}/${PERSONALITY}"
 
 # =============================================================================
 # Parse and validate rounds

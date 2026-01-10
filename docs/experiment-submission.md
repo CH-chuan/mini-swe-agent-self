@@ -11,7 +11,7 @@ This guide explains how to use the unified experiment submission system for runn
     -i submit-in-rules \                   # Instruction template (submit-in-rules, submit-as-tool)
     -r 0:1 \                               # Round range START:END, exclusive (0:5 = r00-r04)
     -t '^(django__django-11951|...)$' \    # Task filter regex (default: 60-task set)
-    -o experiments/model/personality \     # Output directory (default: auto-generated)
+    -o experiments \                       # Base output dir (full path: base/MODEL/INSTRUCTION/PERSONALITY)
     --temperature 0.0 \                    # Model temperature (default: from model config)
     --step-limit 80 \                      # Max agent steps (default: from model config)
     --timeout 30 \                         # Command timeout in seconds (default: from model config)
@@ -24,13 +24,17 @@ This guide explains how to use the unified experiment submission system for runn
 Submit all conscientiousness personality variants with 21 rounds each:
 
 ```bash
+# Using default base path (experiments/)
 for P in HC-gpt LC-gpt HC-p2 LC-p2 HC-p2-modify LC-p2-modify HC-item-120 LC-item-120; do
-    ./submit-experiment.sh \
-        -m qwen3coder-30b \
-        -p "$P" \
-        -r 0:21 \
-        -o "experiments/qwen3coder-30b/${P}"
+    ./submit-experiment.sh -m qwen3coder-30b -p "$P" -r 0:21
 done
+# Output: experiments/qwen3coder-30b/submit-in-rules/{HC-gpt,LC-gpt,...}/r00-r20/
+
+# Using custom base path
+for P in HC-gpt LC-gpt HC-p2 LC-p2 HC-p2-modify LC-p2-modify HC-item-120 LC-item-120; do
+    ./submit-experiment.sh -m qwen3coder-30b -p "$P" -r 0:21 -o my-experiment
+done
+# Output: my-experiment/qwen3coder-30b/submit-in-rules/{HC-gpt,LC-gpt,...}/r00-r20/
 ```
 
 This submits 8 personalities × 21 rounds = **168 SLURM jobs**.
@@ -91,7 +95,7 @@ exp_configs/
 | `--instruction` | `-i` | Instruction template | `submit-in-rules` |
 | `--rounds` | `-r` | Round range (START:END) | `0:1` |
 | `--tasks` | `-t` | Instance filter regex | Default 60-task set |
-| `--output` | `-o` | Base output directory | Auto-generated |
+| `--output` | `-o` | Base output directory | `experiments` |
 | `--dry-run` | | Preview without submitting | |
 | `--list-models` | | List available models | |
 | `--list-personalities` | | List available personalities | |

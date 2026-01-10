@@ -11,7 +11,7 @@ Submit SWE-bench experiments to HPC with different models and personality prompt
     -i submit-in-rules \                   # Instruction template (submit-in-rules, submit-as-tool)
     -r 0:1 \                               # Round range START:END, exclusive (0:5 = r00-r04)
     -t '^(django__django-11951|...)$' \    # Task filter regex (default: 60-task set)
-    -o experiments/model/personality \     # Output directory (default: auto-generated)
+    -o experiments \                       # Base output dir (full path: base/MODEL/INSTRUCTION/PERSONALITY)
     --temperature 0.0 \                    # Model temperature (default: from model config)
     --step-limit 80 \                      # Max agent steps (default: from model config)
     --timeout 30 \                         # Command timeout in seconds (default: from model config)
@@ -22,13 +22,11 @@ Submit SWE-bench experiments to HPC with different models and personality prompt
 ### Batch Submission Example
 
 ```bash
+# Using default base path (experiments/)
 for P in HC-gpt LC-gpt HC-p2 LC-p2 HC-p2-modify LC-p2-modify HC-item-120 LC-item-120; do
-    ./submit-experiment.sh \
-        -m qwen3coder-30b \
-        -p "$P" \
-        -r 0:21 \
-        -o "experiments/qwen3coder-30b/${P}"
+    ./submit-experiment.sh -m qwen3coder-30b -p "$P" -r 0:21
 done
+# Output: experiments/qwen3coder-30b/submit-in-rules/{HC-gpt,LC-gpt,...}/r00-r20/
 ```
 
 This submits 8 personalities × 21 rounds = **168 SLURM jobs**.
@@ -50,7 +48,7 @@ This submits 8 personalities × 21 rounds = **168 SLURM jobs**.
 | `--instruction` | `-i` | `submit-in-rules` | Instruction template |
 | `--rounds` | `-r` | `0:1` | Round range (START:END, exclusive) |
 | `--tasks` | `-t` | 60-task set | Instance filter regex |
-| `--output` | `-o` | Auto-generated | Output directory |
+| `--output` | `-o` | `experiments` | Base output dir (full: base/MODEL/INSTRUCTION/PERSONALITY) |
 | `--dry-run` | | | Preview without submitting |
 
 **Model-specific settings (from model config, can override):**
