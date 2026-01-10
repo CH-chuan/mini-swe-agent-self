@@ -278,7 +278,7 @@ export SERVED_MODEL_NAME
 export VLLM_ENDPOINT
 
 # Generate config using Python for robust template substitution
-JOB_CONFIG="$JOB_RESULTS_DIR/config.yaml"
+export JOB_CONFIG="$JOB_RESULTS_DIR/config.yaml"
 
 python3 << 'PYTHON_SCRIPT'
 import os
@@ -305,8 +305,6 @@ with open(output_path, 'w') as f:
 
 print(f"Config generated: {output_path}")
 PYTHON_SCRIPT
-
-export JOB_CONFIG
 
 echo "Generated config saved to: $JOB_CONFIG"
 
