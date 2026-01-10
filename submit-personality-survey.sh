@@ -53,7 +53,7 @@ INVENTORY_PATH="$INVENTORY_120"
 # Model info (should match experiment or be consistent)
 MODEL_NAME="Qwen/Qwen3-Coder-30B-A3B-Instruct"
 SERVED_MODEL_NAME="Qwen3-Coder"
-MODELS_DIR="/project/jingjing_storage/persona_coder/models"
+MODELS_DIR="/scratch/muh5jn/models"
 APPTAINER_IMAGE="/project/jingjing_storage/persona_coder/ubuntu-25.04.sif"
 
 

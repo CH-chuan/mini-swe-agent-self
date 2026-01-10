@@ -36,7 +36,7 @@ export APPTAINER_CACHEDIR=/scratch/muh5jn/apptainer_cache
 
 : "${MODEL_NAME:=Qwen/Qwen3-Coder-30B-A3B-Instruct}"
 : "${SERVED_MODEL_NAME:=Qwen3-Coder}"
-: "${MODELS_DIR:=/project/jingjing_storage/persona_coder/models}"
+: "${MODELS_DIR:=/scratch/muh5jn/models}"
 : "${APPTAINER_IMAGE:=/project/jingjing_storage/persona_coder/ubuntu-25.04.sif}"
 
 : "${RESUME:=true}"

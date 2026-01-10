@@ -246,7 +246,7 @@ SNAPSHOT_HASH=""                         # Optional: specific model snapshot
 # =============================================================================
 # Paths
 # =============================================================================
-MODELS_DIR="/project/jingjing_storage/persona_coder/models"
+MODELS_DIR="/scratch/muh5jn/models"
 APPTAINER_IMAGE="/project/jingjing_storage/persona_coder/ubuntu-25.04.sif"
 
 # =============================================================================
