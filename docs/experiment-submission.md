@@ -32,7 +32,8 @@ The experiment submission system provides a flexible way to run experiments with
 exp_configs/
 ├── models/                     # Model configuration files
 │   ├── qwen3coder-30b.conf
-│   └── gptoss-120b.conf
+│   ├── gptoss-120b.conf
+│   └── devstral-small.conf
 └── templates/
     ├── base.yaml               # Base config template
     ├── personality/            # Personality prompt files
@@ -158,6 +159,31 @@ exp_configs/
 | `submit-in-rules` | Submit command in "Important Rules" section |
 | `submit-as-tool` | Submit command as a tool example |
 
+## Available Models
+
+| Model | GPUs | Container | Notes |
+|-------|------|-----------|-------|
+| `qwen3coder-30b` | 1x A100 | ubuntu-25.04.sif | Requires HF token, uses snapshot path |
+| `gptoss-120b` | 2x A100 | ubuntu-25.04.sif | Uses TRITON_ATTN backend |
+| `devstral-small` | 1x A100 | vllm-openai.sif | Direct args mode |
+
+### Model-Specific vLLM Configurations
+
+**Qwen3-Coder-30B:**
+- Uses HuggingFace token for authentication
+- Uses snapshot-based model path
+- Args: `--max-model-len 128000`
+
+**GPToss-120B:**
+- Requires 2 GPUs with tensor parallelism
+- Env: `VLLM_ATTENTION_BACKEND=TRITON_ATTN`
+- Args: `--async-scheduling --disable-custom-all-reduce`
+
+**Devstral-Small:**
+- Uses different container (vllm-openai.sif)
+- Uses direct args mode (no "vllm serve" prefix)
+- Different HF_HOME path (`/hf_home`)
+
 ## Adding New Components
 
 ### Adding a New Model
@@ -165,23 +191,75 @@ exp_configs/
 Create a file `exp_configs/models/your-model.conf`:
 
 ```bash
-# Model identity
-MODEL_NAME="your-model-name"
-SERVED_MODEL_NAME="Your-Model"
-SNAPSHOT_HASH="abc123..."
+# =============================================================================
+# Model Identity
+# =============================================================================
+MODEL_NAME="your-org/your-model-name"    # HuggingFace model ID or local path
+SERVED_MODEL_NAME="Your-Model"           # Name exposed via vLLM API
+SNAPSHOT_HASH=""                         # Optional: specific model snapshot
 
+# =============================================================================
 # Paths
-MODELS_DIR="/path/to/models"
-APPTAINER_IMAGE="/path/to/image.sif"
+# =============================================================================
+MODELS_DIR="/project/jingjing_storage/persona_coder/models"
+APPTAINER_IMAGE="/project/jingjing_storage/persona_coder/ubuntu-25.04.sif"
 
-# GPU requirements
-GPU_COUNT=1          # Number of GPUs needed
-GPU_TYPE="a100"      # GPU type
-GPU_CONSTRAINT="a100_80gb"
+# =============================================================================
+# GPU Requirements
+# =============================================================================
+GPU_COUNT=1                              # Number of GPUs needed
+GPU_TYPE="a100"                          # GPU type for SLURM
+GPU_CONSTRAINT="a100_80gb"               # SLURM constraint
 
-# Model defaults
+# =============================================================================
+# Model Defaults
+# =============================================================================
 TEMPERATURE="0.0"
+
+# =============================================================================
+# vLLM Serving Configuration
+# =============================================================================
+# Whether to use snapshot hash in model path (true/false)
+USE_SNAPSHOT_PATH="false"
+
+# HF_HOME bind path inside container
+CONTAINER_HF_HOME="/models"
+
+# Additional environment variables for apptainer (space-separated KEY=VALUE)
+# Example: VLLM_ENV_VARS="VLLM_ATTENTION_BACKEND=TRITON_ATTN"
+VLLM_ENV_VARS=""
+
+# vLLM command-line arguments (appended to vllm serve command)
+# Note: --tensor-parallel-size is added automatically based on GPU_COUNT
+VLLM_ARGS="--max-model-len 128000"
+
+# Whether HuggingFace token is required
+REQUIRES_HF_TOKEN="false"
+
+# For containers that run vllm directly (like vllm-openai.sif)
+# Set to "true" to pass args directly instead of "vllm serve ..."
+VLLM_DIRECT_ARGS="false"
 ```
+
+#### Model Config Variables Reference
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `MODEL_NAME` | Yes | HuggingFace model ID or local path |
+| `SERVED_MODEL_NAME` | Yes | Name exposed via vLLM API |
+| `SNAPSHOT_HASH` | No | Specific model snapshot hash |
+| `MODELS_DIR` | Yes | Host path to models directory |
+| `APPTAINER_IMAGE` | Yes | Path to Apptainer/Singularity image |
+| `GPU_COUNT` | Yes | Number of GPUs needed |
+| `GPU_TYPE` | Yes | GPU type (a100, v100, h100) |
+| `GPU_CONSTRAINT` | Yes | SLURM constraint string |
+| `TEMPERATURE` | Yes | Default temperature |
+| `USE_SNAPSHOT_PATH` | No | Use snapshot hash in model path |
+| `CONTAINER_HF_HOME` | No | Bind path for HF_HOME in container |
+| `VLLM_ENV_VARS` | No | Additional environment variables |
+| `VLLM_ARGS` | No | Additional vLLM arguments |
+| `REQUIRES_HF_TOKEN` | No | Whether HF token is needed |
+| `VLLM_DIRECT_ARGS` | No | For containers that run vllm directly |
 
 ### Adding a New Personality
 
