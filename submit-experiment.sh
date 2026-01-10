@@ -27,6 +27,7 @@ TEMPERATURE=""
 STEP_LIMIT=""
 TIMEOUT=""
 TIME_LIMIT=""
+REDO_EXISTING="false"
 
 # =============================================================================
 # Help / Usage
@@ -49,6 +50,7 @@ OPTIONS:
   --step-limit INT          Max agent steps (default: model config)
   --timeout INT             Command timeout in seconds (default: model config)
   --time-limit HH:MM:SS     SLURM time limit (default: model config)
+  --redo-existing           Redo all instances, ignore existing results (default: skip existing)
   --dry-run                 Show config and sbatch command without submitting
   --list-models             List available model configs
   --list-personalities      List available personality prompts
@@ -136,6 +138,10 @@ while [[ $# -gt 0 ]]; do
         --time-limit)
             TIME_LIMIT="$2"
             shift 2
+            ;;
+        --redo-existing)
+            REDO_EXISTING="true"
+            shift
             ;;
         --dry-run)
             DRY_RUN=true
@@ -259,6 +265,7 @@ echo "Temperature:    $TEMPERATURE"
 echo "Step Limit:     $STEP_LIMIT"
 echo "Timeout:        ${TIMEOUT}s"
 echo "Time Limit:     $TIME_LIMIT"
+echo "Redo Existing:  $REDO_EXISTING"
 echo "=============================================="
 echo ""
 
@@ -318,6 +325,7 @@ TEMPERATURE="${TEMPERATURE}",\
 STEP_LIMIT="${STEP_LIMIT}",\
 TIMEOUT="${TIMEOUT}",\
 PERSONALITY="${PERSONALITY}",\
+REDO_EXISTING="${REDO_EXISTING}",\
 ROUND_INDEX="$((ROUND - ROUND_START + 1))",\
 ROUNDS="${TOTAL_ROUNDS}" \
         "${SLURM_SCRIPT}"

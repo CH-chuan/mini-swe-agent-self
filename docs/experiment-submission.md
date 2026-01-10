@@ -16,6 +16,7 @@ This guide explains how to use the unified experiment submission system for runn
     --step-limit 80 \                      # Max agent steps (default: from model config)
     --timeout 30 \                         # Command timeout in seconds (default: from model config)
     --time-limit 02:00:00 \                # SLURM time limit (default: from model config)
+    --redo-existing \                      # Redo all instances (default: skip existing, resume mode)
     --dry-run                              # Preview config without submitting (remove to submit)
 ```
 

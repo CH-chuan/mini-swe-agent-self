@@ -332,13 +332,26 @@ echo "  Output:   $OUTPUT_DIR"
 echo "  Filter:   ${INSTANCE_FILTER:0:50}..."
 echo ""
 
-mini-extra swebench \
-    --config "$JOB_CONFIG" \
-    --subset verified \
-    --split test \
-    --filter "${INSTANCE_FILTER}" \
-    --output "${OUTPUT_DIR}" \
+# Build command with optional --redo-existing flag
+SWEBENCH_CMD=(
+    mini-extra swebench
+    --config "$JOB_CONFIG"
+    --subset verified
+    --split test
+    --filter "${INSTANCE_FILTER}"
+    --output "${OUTPUT_DIR}"
     --sif-cache "${SIF_CACHE}"
+)
+
+if [[ "${REDO_EXISTING:-false}" == "true" ]]; then
+    SWEBENCH_CMD+=(--redo-existing)
+    echo "  Mode:     REDO ALL (ignoring existing results)"
+else
+    echo "  Mode:     RESUME (skipping existing results)"
+fi
+echo ""
+
+"${SWEBENCH_CMD[@]}"
 
 EXIT_CODE=$?
 
