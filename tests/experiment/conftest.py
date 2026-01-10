@@ -68,6 +68,8 @@ def all_personality_names() -> list:
         "LC-p2-modify",
         "HC-item-120",
         "LC-item-120",
+        "HC-item-300",
+        "LC-item-300",
         "HA",
         "LA",
         "HE",

@@ -1,0 +1,2 @@
+    TODO: Fill in High Conscientiousness 300-item personality prompt.
+    Format should match HC-item-120.txt with 300-item inventory results.

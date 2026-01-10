@@ -182,6 +182,8 @@ exp_configs/
 | `LC-p2-modify` | Low Conscientiousness - Modified P2 |
 | `HC-item-120` | High Conscientiousness - Item-based (120 items) |
 | `LC-item-120` | Low Conscientiousness - Item-based (120 items) |
+| `HC-item-300` | High Conscientiousness - Item-based (300 items) |
+| `LC-item-300` | Low Conscientiousness - Item-based (300 items) |
 
 ### Other Big Five Traits
 

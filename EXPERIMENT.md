@@ -121,6 +121,7 @@ done
 | Conscientiousness (P2) | `HC-p2` | `LC-p2` |
 | Conscientiousness (P2 modified) | `HC-p2-modify` | `LC-p2-modify` |
 | Conscientiousness (Item-120) | `HC-item-120` | `LC-item-120` |
+| Conscientiousness (Item-300) | `HC-item-300` | `LC-item-300` |
 | Agreeableness | `HA` | `LA` |
 | Extraversion | `HE` | `LE` |
 | Openness | `HO` | `LO` |
@@ -129,7 +130,7 @@ done
 ## Output Structure
 
 ```
-experiments/{model}/{personality}/{instruction}/r{NN}/
+experiments/{model}/{instruction}/{personality}/r{NN}/
     instance_1/
     instance_2/
     ...
