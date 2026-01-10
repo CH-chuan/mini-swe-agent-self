@@ -13,6 +13,7 @@
 # =============================================================================
 # Load modules
 # =============================================================================
+module purge
 module load miniforge apptainer
 
 # =============================================================================
@@ -50,6 +51,14 @@ if [[ ! -f "${MODEL_CONF}" ]]; then
 fi
 source "$MODEL_CONF"
 
+# Set defaults for optional config variables
+: "${USE_SNAPSHOT_PATH:=false}"
+: "${CONTAINER_HF_HOME:=/models}"
+: "${VLLM_ENV_VARS:=}"
+: "${VLLM_ARGS:=}"
+: "${REQUIRES_HF_TOKEN:=false}"
+: "${VLLM_DIRECT_ARGS:=false}"
+
 # =============================================================================
 # Setup job results directory
 # =============================================================================
@@ -74,6 +83,14 @@ echo "TEMPERATURE:        ${TEMPERATURE}"
 echo "STEP_LIMIT:         ${STEP_LIMIT}"
 echo "TIMEOUT:            ${TIMEOUT}"
 echo "JOB_RESULTS_DIR:    ${JOB_RESULTS_DIR}"
+echo ""
+echo "vLLM Configuration:"
+echo "  USE_SNAPSHOT_PATH:  ${USE_SNAPSHOT_PATH}"
+echo "  CONTAINER_HF_HOME:  ${CONTAINER_HF_HOME}"
+echo "  VLLM_ENV_VARS:      ${VLLM_ENV_VARS:-<none>}"
+echo "  VLLM_ARGS:          ${VLLM_ARGS:-<none>}"
+echo "  REQUIRES_HF_TOKEN:  ${REQUIRES_HF_TOKEN}"
+echo "  VLLM_DIRECT_ARGS:   ${VLLM_DIRECT_ARGS}"
 echo "=============================================="
 echo ""
 
@@ -86,12 +103,15 @@ echo "=================================================="
 
 source activate vllm_env
 
-# Load HuggingFace token
-HF_TOKEN=$(cat "$HOME/.cache/huggingface/token" 2>/dev/null || echo "")
-if [[ -z "$HF_TOKEN" ]]; then
-    echo "WARNING: HuggingFace token not found"
-else
-    echo "HF_TOKEN loaded: ${HF_TOKEN:0:10}...${HF_TOKEN: -10}"
+# Load HuggingFace token if required
+HF_TOKEN=""
+if [[ "${REQUIRES_HF_TOKEN}" == "true" ]]; then
+    HF_TOKEN=$(cat "$HOME/.cache/huggingface/token" 2>/dev/null || echo "")
+    if [[ -z "$HF_TOKEN" ]]; then
+        echo "WARNING: HuggingFace token required but not found"
+    else
+        echo "HF_TOKEN loaded: ${HF_TOKEN:0:10}...${HF_TOKEN: -10}"
+    fi
 fi
 
 # Setup vLLM port and endpoint
@@ -99,38 +119,88 @@ VLLM_LOG="$JOB_RESULTS_DIR/vllm_server.log"
 VLLM_PORT=$((20000 + SLURM_JOB_ID % 30000))
 VLLM_BASE_URL="http://0.0.0.0:${VLLM_PORT}"
 
-# Construct model path
-if [[ -n "${SNAPSHOT_HASH:-}" ]]; then
-    MODEL_PATH="/models/hub/models--${MODEL_NAME//\//--}/snapshots/${SNAPSHOT_HASH}"
+# Construct model path based on configuration
+if [[ "${USE_SNAPSHOT_PATH}" == "true" && -n "${SNAPSHOT_HASH}" ]]; then
+    # Use full snapshot path for models with snapshot hash
+    MODEL_PATH="${CONTAINER_HF_HOME}/hub/models--${MODEL_NAME//\//--}/snapshots/${SNAPSHOT_HASH}"
 else
-    MODEL_PATH="/models/${MODEL_NAME}"
+    # Use model name directly (may be downloaded or local)
+    MODEL_PATH="${MODEL_NAME}"
 fi
 
 echo "VLLM_PORT:          ${VLLM_PORT}"
 echo "MODEL_PATH:         ${MODEL_PATH}"
 
-# Build vLLM command
-VLLM_CMD="vllm serve ${MODEL_PATH} --served-model-name ${SERVED_MODEL_NAME} --max-model-len 128000 --port ${VLLM_PORT}"
+# Build environment variables for apptainer
+APPTAINER_ENV_ARGS=(
+    --env "HF_HOME=${CONTAINER_HF_HOME}"
+    --env "PATH=$HOME/.conda/envs/vllm_env/bin:$PATH"
+    --env "CPATH=/usr/lib/gcc/x86_64-linux-gnu/14/include"
+)
 
-# Add tensor parallelism for multi-GPU
-if (( GPU_COUNT > 1 )); then
-    VLLM_CMD="${VLLM_CMD} --tensor-parallel-size ${GPU_COUNT}"
-    echo "TENSOR_PARALLEL:    ${GPU_COUNT}"
+# Add HF token if provided
+if [[ -n "$HF_TOKEN" ]]; then
+    APPTAINER_ENV_ARGS+=(--env "HF_TOKEN=$HF_TOKEN")
 fi
 
-echo ""
-echo "Starting vLLM server..."
-echo "Command: ${VLLM_CMD}"
+# Add custom environment variables from model config
+if [[ -n "${VLLM_ENV_VARS}" ]]; then
+    for env_var in ${VLLM_ENV_VARS}; do
+        APPTAINER_ENV_ARGS+=(--env "$env_var")
+    done
+fi
 
-apptainer run --nv \
-    --bind "$MODELS_DIR:/models" \
-    --env HF_HOME=/models \
-    --env HF_TOKEN="$HF_TOKEN" \
-    --env PATH="$HOME/.conda/envs/vllm_env/bin:$PATH" \
-    --env CPATH=/usr/lib/gcc/x86_64-linux-gnu/14/include \
-    "$APPTAINER_IMAGE" \
-    bash -c "${VLLM_CMD}" \
-    > "$VLLM_LOG" 2>&1 &
+# Build vLLM command based on container type
+if [[ "${VLLM_DIRECT_ARGS}" == "true" ]]; then
+    # For containers like vllm-openai.sif that run vllm directly
+    # Arguments are passed directly to the container
+    VLLM_CMD="--model ${MODEL_PATH} --served-model-name ${SERVED_MODEL_NAME} --port ${VLLM_PORT}"
+
+    # Add tensor parallelism for multi-GPU
+    if (( GPU_COUNT > 1 )); then
+        VLLM_CMD="${VLLM_CMD} --tensor-parallel-size ${GPU_COUNT}"
+    fi
+
+    # Add custom vLLM args
+    if [[ -n "${VLLM_ARGS}" ]]; then
+        VLLM_CMD="${VLLM_CMD} ${VLLM_ARGS}"
+    fi
+
+    echo ""
+    echo "Starting vLLM server (direct args mode)..."
+    echo "Command: apptainer run --nv ... ${APPTAINER_IMAGE} ${VLLM_CMD}"
+
+    apptainer run --nv \
+        --bind "$MODELS_DIR:${CONTAINER_HF_HOME}" \
+        "${APPTAINER_ENV_ARGS[@]}" \
+        "$APPTAINER_IMAGE" \
+        ${VLLM_CMD} \
+        > "$VLLM_LOG" 2>&1 &
+else
+    # Standard mode: run "vllm serve" command inside container
+    VLLM_CMD="vllm serve ${MODEL_PATH} --served-model-name ${SERVED_MODEL_NAME} --port ${VLLM_PORT}"
+
+    # Add tensor parallelism for multi-GPU
+    if (( GPU_COUNT > 1 )); then
+        VLLM_CMD="${VLLM_CMD} --tensor-parallel-size ${GPU_COUNT}"
+    fi
+
+    # Add custom vLLM args
+    if [[ -n "${VLLM_ARGS}" ]]; then
+        VLLM_CMD="${VLLM_CMD} ${VLLM_ARGS}"
+    fi
+
+    echo ""
+    echo "Starting vLLM server..."
+    echo "Command: ${VLLM_CMD}"
+
+    apptainer run --nv \
+        --bind "$MODELS_DIR:${CONTAINER_HF_HOME}" \
+        "${APPTAINER_ENV_ARGS[@]}" \
+        "$APPTAINER_IMAGE" \
+        bash -c "${VLLM_CMD}" \
+        > "$VLLM_LOG" 2>&1 &
+fi
 
 VLLM_PID=$!
 echo "$VLLM_PID" > "$JOB_RESULTS_DIR/vllm_server.pid"
