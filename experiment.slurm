@@ -153,8 +153,8 @@ fi
 # Build vLLM command based on container type
 if [[ "${VLLM_DIRECT_ARGS}" == "true" ]]; then
     # For containers like vllm-openai.sif that run vllm directly
-    # Arguments are passed directly to the container
-    VLLM_CMD="--model ${MODEL_PATH} --served-model-name ${SERVED_MODEL_NAME} --port ${VLLM_PORT}"
+    # Arguments are passed directly to the container (model path is positional)
+    VLLM_CMD="serve ${MODEL_PATH} --served-model-name ${SERVED_MODEL_NAME} --port ${VLLM_PORT}"
 
     # Add tensor parallelism for multi-GPU
     if (( GPU_COUNT > 1 )); then
@@ -283,6 +283,7 @@ export JOB_CONFIG="$JOB_RESULTS_DIR/config.yaml"
 python3 << 'PYTHON_SCRIPT'
 import os
 import re
+import textwrap
 
 # Read template
 template_path = os.environ['BASE_TEMPLATE']
@@ -292,9 +293,34 @@ with open(template_path, 'r') as f:
     template = f.read()
 
 # Substitute ${VAR} patterns with environment variables
+# Handles multi-line values by preserving proper YAML indentation
 def replace_var(match):
     var_name = match.group(1)
     value = os.environ.get(var_name, '')
+
+    if not value:
+        return value
+
+    # Normalize: strip common leading indentation from the value
+    # This handles both indented (item-120) and non-indented (item-300) files
+    value = textwrap.dedent(value)
+
+    # For multi-line values, apply the template's indentation
+    if '\n' in value:
+        start = match.start()
+        # Find the beginning of the current line
+        line_start = template.rfind('\n', 0, start)
+        line_start = 0 if line_start == -1 else line_start + 1
+
+        # Get the whitespace (indentation) before the variable
+        prefix = template[line_start:start]
+        indent = prefix if prefix.isspace() else ''
+
+        # Apply indentation to all lines after the first
+        lines = value.split('\n')
+        indented_lines = [lines[0]] + [indent + line if line.strip() else line for line in lines[1:]]
+        value = '\n'.join(indented_lines)
+
     return value
 
 result = re.sub(r'\$\{([A-Z_][A-Z0-9_]*)\}', replace_var, template)
