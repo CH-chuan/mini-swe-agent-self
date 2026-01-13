@@ -152,9 +152,15 @@ fi
 
 # Build vLLM command based on container type
 if [[ "${VLLM_DIRECT_ARGS}" == "true" ]]; then
-    # For containers like vllm-openai.sif that have "vllm serve" in their runscript
-    # Pass model path as first positional argument (container adds "vllm serve" prefix)
-    VLLM_CMD="${MODEL_PATH} --served-model-name ${SERVED_MODEL_NAME} --port ${VLLM_PORT}"
+    # For containers like vllm-openai.sif that have vllm pre-installed
+    # Use HOST model path (not container-mapped path) since /scratch is auto-mounted
+    if [[ "${USE_SNAPSHOT_PATH}" == "true" && -n "${SNAPSHOT_HASH}" ]]; then
+        HOST_MODEL_PATH="${MODELS_DIR}/hub/models--${MODEL_NAME//\//--}/snapshots/${SNAPSHOT_HASH}"
+    else
+        HOST_MODEL_PATH="${MODEL_NAME}"
+    fi
+
+    VLLM_CMD="${HOST_MODEL_PATH} --served-model-name ${SERVED_MODEL_NAME} --port ${VLLM_PORT}"
 
     # Add tensor parallelism for multi-GPU
     if (( GPU_COUNT > 1 )); then
@@ -168,11 +174,16 @@ if [[ "${VLLM_DIRECT_ARGS}" == "true" ]]; then
 
     echo ""
     echo "Starting vLLM server (direct args mode)..."
-    echo "Command: apptainer run --nv ... ${APPTAINER_IMAGE} ${VLLM_CMD}"
+    echo "Command: apptainer run --nv --cleanenv ... ${APPTAINER_IMAGE} ${VLLM_CMD}"
 
-    apptainer run --nv \
+    # Use --cleanenv to isolate container from host environment (use container's vllm, not host's conda)
+    # Only pass HF_HOME and HF_TOKEN, not PATH
+    DIRECT_ENV_ARGS=(--env "HF_HOME=${CONTAINER_HF_HOME}")
+    [[ -n "$HF_TOKEN" ]] && DIRECT_ENV_ARGS+=(--env "HF_TOKEN=$HF_TOKEN")
+
+    apptainer run --nv --cleanenv \
         --bind "$MODELS_DIR:${CONTAINER_HF_HOME}" \
-        "${APPTAINER_ENV_ARGS[@]}" \
+        "${DIRECT_ENV_ARGS[@]}" \
         "$APPTAINER_IMAGE" \
         ${VLLM_CMD} \
         > "$VLLM_LOG" 2>&1 &
