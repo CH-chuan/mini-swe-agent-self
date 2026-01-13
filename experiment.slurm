@@ -152,9 +152,9 @@ fi
 
 # Build vLLM command based on container type
 if [[ "${VLLM_DIRECT_ARGS}" == "true" ]]; then
-    # For containers like vllm-openai.sif that run vllm directly
-    # Arguments are passed directly to the container (model path is positional)
-    VLLM_CMD="serve ${MODEL_PATH} --served-model-name ${SERVED_MODEL_NAME} --port ${VLLM_PORT}"
+    # For containers like vllm-openai.sif that have "vllm serve" in their runscript
+    # Pass model path as first positional argument (container adds "vllm serve" prefix)
+    VLLM_CMD="${MODEL_PATH} --served-model-name ${SERVED_MODEL_NAME} --port ${VLLM_PORT}"
 
     # Add tensor parallelism for multi-GPU
     if (( GPU_COUNT > 1 )); then
