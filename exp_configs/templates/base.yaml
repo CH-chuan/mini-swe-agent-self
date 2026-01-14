@@ -17,7 +17,7 @@ agent:
 
     Failure to follow these rules will cause your response to be rejected.
   instance_template: |
-${INSTANCE_TEMPLATE}
+    ${INSTANCE_TEMPLATE}
   action_observation_template: |
     <returncode>{{output.returncode}}</returncode>
     {% if output.output | length < 10000 -%}

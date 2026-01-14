@@ -1,11 +1,12 @@
 """Tests for generated config validation."""
 
 import re
+from pathlib import Path
 
 import pytest
 import yaml
 
-from .conftest import substitute_template
+from .conftest import substitute_template, get_personality_files, get_instruction_files
 
 
 class TestGeneratedConfigValidity:
@@ -243,3 +244,161 @@ class TestDifferentTemperatures:
         model_temp = config["model"]["model_kwargs"]["temperature"]
         # May be parsed as float or string
         assert str(model_temp) == temp or float(model_temp) == float(temp)
+
+
+class TestRealPersonalityFiles:
+    """Test config generation with actual personality template files."""
+
+    @pytest.fixture
+    def personality_files(self, templates_dir):
+        """Return all personality template files."""
+        return get_personality_files(templates_dir)
+
+    @pytest.fixture
+    def instruction_files(self, templates_dir):
+        """Return all instruction template files."""
+        return get_instruction_files(templates_dir)
+
+    def test_all_personalities_produce_valid_yaml(
+        self, base_template_content, templates_dir
+    ):
+        """Test that all personality files produce valid YAML configs."""
+        personality_files = get_personality_files(templates_dir)
+        instruction_files = get_instruction_files(templates_dir)
+
+        assert len(personality_files) > 0, "No personality files found"
+        assert len(instruction_files) > 0, "No instruction files found"
+
+        # Use first instruction file for testing
+        instruction_content = instruction_files[0].read_text()
+
+        for personality_file in personality_files:
+            personality_content = personality_file.read_text()
+
+            env_vars = {
+                "PERSONALITY_PROMPT": personality_content,
+                "INSTANCE_TEMPLATE": instruction_content,
+                "TEMPERATURE": "0.0",
+                "STEP_LIMIT": "80",
+                "TIMEOUT": "30",
+                "SERVED_MODEL_NAME": "Test-Model",
+                "VLLM_ENDPOINT": "http://localhost:8000/v1",
+            }
+
+            result = substitute_template(base_template_content, env_vars)
+
+            # This should not raise any exceptions
+            try:
+                config = yaml.safe_load(result)
+                assert config is not None, f"Config is None for {personality_file.name}"
+                assert "agent" in config, f"Missing 'agent' section for {personality_file.name}"
+            except yaml.YAMLError as e:
+                pytest.fail(f"Invalid YAML for personality '{personality_file.name}': {e}")
+
+    def test_all_instructions_produce_valid_yaml(
+        self, base_template_content, templates_dir
+    ):
+        """Test that all instruction files produce valid YAML configs."""
+        personality_files = get_personality_files(templates_dir)
+        instruction_files = get_instruction_files(templates_dir)
+
+        assert len(instruction_files) > 0, "No instruction files found"
+
+        # Use first personality file (or empty for NOP)
+        personality_content = ""
+        for pf in personality_files:
+            if pf.stem == "NOP":
+                personality_content = pf.read_text()
+                break
+
+        for instruction_file in instruction_files:
+            instruction_content = instruction_file.read_text()
+
+            env_vars = {
+                "PERSONALITY_PROMPT": personality_content,
+                "INSTANCE_TEMPLATE": instruction_content,
+                "TEMPERATURE": "0.0",
+                "STEP_LIMIT": "80",
+                "TIMEOUT": "30",
+                "SERVED_MODEL_NAME": "Test-Model",
+                "VLLM_ENDPOINT": "http://localhost:8000/v1",
+            }
+
+            result = substitute_template(base_template_content, env_vars)
+
+            try:
+                config = yaml.safe_load(result)
+                assert config is not None, f"Config is None for {instruction_file.name}"
+                assert "agent" in config, f"Missing 'agent' section for {instruction_file.name}"
+            except yaml.YAMLError as e:
+                pytest.fail(f"Invalid YAML for instruction '{instruction_file.name}': {e}")
+
+    @pytest.mark.parametrize("personality_name", [
+        "NOP", "HC-gpt", "LC-gpt", "HC-p2", "LC-p2",
+        "HC-p2-modify", "LC-p2-modify", "HC-item-120", "LC-item-120",
+        "HC-item-300", "LC-item-300",
+    ])
+    def test_specific_personality_valid_yaml(
+        self, base_template_content, templates_dir, personality_name
+    ):
+        """Test specific personality files produce valid YAML."""
+        personality_file = templates_dir / "personality" / f"{personality_name}.txt"
+        instruction_file = templates_dir / "instructions" / "submit-in-rules.txt"
+
+        if not personality_file.exists():
+            pytest.skip(f"Personality file {personality_name}.txt not found")
+        if not instruction_file.exists():
+            pytest.skip("Instruction file submit-in-rules.txt not found")
+
+        personality_content = personality_file.read_text()
+        instruction_content = instruction_file.read_text()
+
+        env_vars = {
+            "PERSONALITY_PROMPT": personality_content,
+            "INSTANCE_TEMPLATE": instruction_content,
+            "TEMPERATURE": "0.0",
+            "STEP_LIMIT": "80",
+            "TIMEOUT": "30",
+            "SERVED_MODEL_NAME": "Test-Model",
+            "VLLM_ENDPOINT": "http://localhost:8000/v1",
+        }
+
+        result = substitute_template(base_template_content, env_vars)
+
+        config = yaml.safe_load(result)
+        assert config is not None
+        assert "agent" in config
+        assert "system_template" in config["agent"]
+        assert "instance_template" in config["agent"]
+
+    def test_item_300_personality_content_preserved(
+        self, base_template_content, templates_dir
+    ):
+        """Test that HC-item-300 long content is fully preserved in config."""
+        personality_file = templates_dir / "personality" / "HC-item-300.txt"
+        instruction_file = templates_dir / "instructions" / "submit-in-rules.txt"
+
+        if not personality_file.exists():
+            pytest.skip("HC-item-300.txt not found")
+
+        personality_content = personality_file.read_text()
+        instruction_content = instruction_file.read_text()
+
+        env_vars = {
+            "PERSONALITY_PROMPT": personality_content,
+            "INSTANCE_TEMPLATE": instruction_content,
+            "TEMPERATURE": "0.0",
+            "STEP_LIMIT": "80",
+            "TIMEOUT": "30",
+            "SERVED_MODEL_NAME": "Test-Model",
+            "VLLM_ENDPOINT": "http://localhost:8000/v1",
+        }
+
+        result = substitute_template(base_template_content, env_vars)
+        config = yaml.safe_load(result)
+
+        system_template = config["agent"]["system_template"]
+        # Check that key phrases from HC-item-300 are present
+        assert "Conscientiousness" in system_template
+        assert "Self-Efficacy" in system_template
+        assert "Very Accurate" in system_template

@@ -104,10 +104,38 @@ def substitute_template(template_content: str, env_vars: dict) -> str:
 
     This is the same regex-based substitution used in the SLURM script
     to replace ${VAR} patterns with environment variable values.
+    Handles multi-line values with proper YAML indentation.
     """
+    import textwrap
+
     def replace_var(match):
         var_name = match.group(1)
-        return env_vars.get(var_name, match.group(0))
+        value = env_vars.get(var_name, '')
+
+        if not value:
+            return value
+
+        # Normalize: strip common leading indentation from the value
+        # This handles both indented (item-120) and non-indented (item-300) files
+        value = textwrap.dedent(value)
+
+        # For multi-line values, apply the template's indentation
+        if '\n' in value:
+            start = match.start()
+            # Find the beginning of the current line
+            line_start = template_content.rfind('\n', 0, start)
+            line_start = 0 if line_start == -1 else line_start + 1
+
+            # Get the whitespace (indentation) before the variable
+            prefix = template_content[line_start:start]
+            indent = prefix if prefix.isspace() else ''
+
+            # Apply indentation to all lines after the first
+            lines = value.split('\n')
+            indented_lines = [lines[0]] + [indent + line if line.strip() else line for line in lines[1:]]
+            value = '\n'.join(indented_lines)
+
+        return value
 
     return re.sub(r'\$\{([A-Z_][A-Z0-9_]*)\}', replace_var, template_content)
 
