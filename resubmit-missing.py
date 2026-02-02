@@ -10,6 +10,18 @@ REPORT_PATH = "exp_track/260202/missing_instances_report.json"
 OUTPUT_PATH = "resubmit-missing.sh"
 
 
+def get_time_limit(missing_count: int) -> str:
+    """Calculate SLURM time limit based on number of missing instances."""
+    if missing_count <= 10:
+        return "00:30:00"  # 30 min
+    elif missing_count <= 25:
+        return "01:00:00"  # 1 hr
+    elif missing_count <= 40:
+        return "01:30:00"  # 1.5 hr
+    else:
+        return "02:00:00"  # 2 hr
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate resubmission script for missing experiment instances")
     parser.add_argument("--dry-run", action="store_true", help="Add 'echo' prefix to commands for testing")
@@ -62,9 +74,11 @@ def main():
             for r in sorted(rounds, key=lambda x: x['round']):
                 # Create regex filter from missing IDs
                 filter_regex = '^(' + '|'.join(r['missing_ids']) + ')$'
+                time_limit = get_time_limit(r['missing_count'])
 
                 lines.append(f"{cmd_prefix}./submit-experiment.sh -m {model} -p {personality} \\")
                 lines.append(f"    -r {r['round']}:{r['round']+1} --redo-existing \\")
+                lines.append(f"    --time-limit {time_limit} \\")
                 lines.append(f"    -t '{filter_regex}'")
                 lines.append("")
 
