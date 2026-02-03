@@ -397,6 +397,92 @@ slurm_outputs/
 - Check cluster GPU availability
 - Multi-GPU models need `GPU_COUNT=2` or higher
 
+## Resubmitting Missing Instances
+
+After running experiments, some instances may fail or timeout. Use the resubmission workflow to identify and retry these missing instances.
+
+### Workflow Overview
+
+1. **Track missing instances** - Generate a report of incomplete runs
+2. **Generate resubmission script** - Create targeted `submit-experiment.sh` commands
+3. **Run resubmission** - Execute the generated script on HPC
+
+### Step 1: Generate Missing Instances Report
+
+First, create a `missing_instances_report.json` in your tracking directory (e.g., `exp_track/260203/`). This file should contain entries like:
+
+```json
+{
+  "devstral-small/submit-in-rules/HC-gpt/r02": {
+    "completed_count": 43,
+    "missing_count": 3,
+    "missing_ids": [
+      "sympy__sympy-22456",
+      "sympy__sympy-23534",
+      "sympy__sympy-24213"
+    ]
+  }
+}
+```
+
+The key format is: `{model}/{instruction}/{personality}/{round}`
+
+### Step 2: Generate Resubmission Script
+
+```bash
+# Generate resubmit-missing.sh from a report
+python exp_track/resubmit-missing.py 260203/missing_instances_report.json
+
+# Preview with dry-run (adds "echo" prefix to commands)
+python exp_track/resubmit-missing.py 260203/missing_instances_report.json --dry-run
+```
+
+The script:
+- Reads the JSON report (path relative to `exp_track/`)
+- Groups missing instances by model → personality → round
+- Generates `./submit-experiment.sh` commands with `--redo-existing` flag and instance filters
+- Outputs `resubmit-missing.sh` to project root
+- Calculates dynamic time limits based on missing count:
+
+| Missing Count | Time Limit |
+|---------------|------------|
+| ≤ 10 | 00:30:00 |
+| ≤ 25 | 01:00:00 |
+| ≤ 40 | 01:30:00 |
+| > 40 | 02:00:00 |
+
+### Step 3: Run Resubmission
+
+```bash
+# On HPC, execute the generated script
+./resubmit-missing.sh
+```
+
+### Generated Command Format
+
+Each command in `resubmit-missing.sh` looks like:
+
+```bash
+./submit-experiment.sh -m devstral-small -p HC-gpt \
+    -r 2:3 --redo-existing \
+    --time-limit 00:30:00 \
+    -t '^(sympy__sympy-22456|sympy__sympy-23534|sympy__sympy-24213)$'
+```
+
+Key flags:
+- `--redo-existing` - Force re-run even if output exists
+- `-t` - Regex filter to target only missing instances
+
+### Example Output
+
+```
+$ python exp_track/resubmit-missing.py 260203/missing_instances_report.json
+Generated /path/to/project/resubmit-missing.sh
+Total experiment runs to resubmit: 104
+  devstral-small: 103 incomplete runs
+  gptoss-120b: 1 incomplete runs
+```
+
 ## Running Tests
 
 ```bash

@@ -6,8 +6,10 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-REPORT_PATH = "exp_track/260202/missing_instances_report.json"
-OUTPUT_PATH = "resubmit-missing.sh"
+# Script lives in exp_track/, output goes to project root
+SCRIPT_DIR = Path(__file__).parent.resolve()
+PROJECT_ROOT = SCRIPT_DIR.parent
+OUTPUT_PATH = PROJECT_ROOT / "resubmit-missing.sh"
 
 
 def get_time_limit(missing_count: int) -> str:
@@ -24,10 +26,19 @@ def get_time_limit(missing_count: int) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="Generate resubmission script for missing experiment instances")
+    parser.add_argument("report_path", type=Path, help="Path to missing_instances_report.json (e.g., 260203/missing_instances_report.json)")
     parser.add_argument("--dry-run", action="store_true", help="Add 'echo' prefix to commands for testing")
     args = parser.parse_args()
 
-    with open(REPORT_PATH) as f:
+    report_path = args.report_path
+    # If relative path, resolve relative to script directory (exp_track/)
+    if not report_path.is_absolute():
+        report_path = SCRIPT_DIR / report_path
+    if not report_path.exists():
+        print(f"Error: Report file not found: {report_path}")
+        return 1
+
+    with open(report_path) as f:
         report = json.load(f)
 
     # Group by model -> personality -> round
@@ -51,7 +62,7 @@ def main():
     lines = [
         "#!/bin/bash",
         "# Auto-generated resubmission script",
-        "# Source: exp_track/260202/missing_instances_report.json",
+        f"# Source: {report_path}",
     ]
     if args.dry_run:
         lines.append("# DRY RUN MODE - commands are echoed, not executed")
